@@ -5,7 +5,7 @@
   https://www.neoe.io/blogs/tutorials/eco2-sensor-thermometer-hygrometer-mit-oled-display-mqtt-kompatibel-variante-breadboard
   Fragen und Anregungen bitte in unserer Facebook-Gruppe adressieren, damit die gesamte Community davon profitiert.
   https://www.facebook.com/groups/neoe.io/
-  Datum der letzten Änderung: 5. Dezember, 2020
+  Datum der letzten Änderung: 6. Dezember, 2020
 **********************************************************************************************************************************/
 
 #include <ESP8266WiFi.h>
@@ -33,7 +33,7 @@ const char* mqtt_config_topic_temperatur = "homeassistant/sensor/temperatur-wohn
 const char* mqtt_config_topic_luftfeuchtigkeit = "homeassistant/sensor/luftfeuchtigkeit-wohnzimmer/config";  // Name des Zimmers bei Bedarf ändern
 const char* mqtt_config_topic_eco2 = "homeassistant/sensor/eco2-wohnzimmer/config"; // Name des Zimmers bei Bedarf ändern
 const char* mqtt_config_topic_tvoc = "homeassistant/sensor/TVOC-wohnzimmer/config"; // Name des Zimmers bei Bedarf ändern
-const char* mqtt_state_topic = "homeassistant/sensor/tlec-wohnzimmer/state";  // Name des Zimmers bei Bedarf ändern
+const char* mqtt_state_topic = "homeassistant/sensor/tlet-wohnzimmer/state";  // Name des Zimmers bei Bedarf ändern
 
 // Speicher-Reservierung für JSON-Dokument, kann mithilfe von arduinojson.org/v6/assistant eventuell noch optimiert werden
 StaticJsonDocument<512> doc_config_temperatur;
@@ -57,6 +57,9 @@ U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 // Korrekturfaktor für Thermometer, aufgrund von Wärmeentwicklung des CCS811
 uint16_t temperaturKorrekturfaktor = 0.5;
+
+// Alle 10 Sekunden eine MQTT-Nachricht senden
+int delay_time = 10000;
 
 // Funktion um Werte per MQTT zu übermitteln
 void publishData(float p_temperatur, float p_luftfeuchtigkeit, float p_eco2, float p_tvoc) {
@@ -98,7 +101,7 @@ void configMqttTemperatur() {
   doc_config_temperatur["device_class"] = "temperature";
   doc_config_temperatur["state_topic"] = mqtt_state_topic;
   doc_config_temperatur["unit_of_measurement"] = "C";
-  doc_config_temperatur["value_template"] = "{{ value_json.temperatur}}";
+  doc_config_temperatur["value_template"] = "{{value_json.temperatur | round(2)}}";
   serializeJson(doc_config_temperatur, mqtt_config_data_temperatur);
   client.publish(mqtt_config_topic_temperatur, mqtt_config_data_temperatur, true);
   delay(1000);
@@ -110,7 +113,7 @@ void configMqttLuftfeuchtigkeit() {
   doc_config_luftfeuchtigkeit["device_class"] = "humidity";
   doc_config_luftfeuchtigkeit["state_topic"] = mqtt_state_topic;
   doc_config_luftfeuchtigkeit["unit_of_measurement"] = "%";
-  doc_config_luftfeuchtigkeit["value_template"] = "{{ value_json.luftfeuchtigkeit}}";
+  doc_config_luftfeuchtigkeit["value_template"] = "{{value_json.luftfeuchtigkeit | round(2)}}";
   serializeJson(doc_config_luftfeuchtigkeit, mqtt_config_data_luftfeuchtigkeit);
   client.publish(mqtt_config_topic_luftfeuchtigkeit, mqtt_config_data_luftfeuchtigkeit, true);
   delay(1000);
@@ -121,7 +124,7 @@ void configMqtteCO2() {
   doc_config_eco2["name"] = "eCO2-Wert Wohnzimmer";  // Name des Zimmers bei Bedarf ändern
   doc_config_eco2["state_topic"] = mqtt_state_topic;
   doc_config_eco2["unit_of_measurement"] = "ppm";
-  doc_config_eco2["value_template"] = "{{ value_json.eco2}}";
+  doc_config_eco2["value_template"] = "{{value_json.eco2}}";
   serializeJson(doc_config_eco2, mqtt_config_data_eco2);
   client.publish(mqtt_config_topic_eco2, mqtt_config_data_eco2, true);
   delay(1000);
@@ -132,7 +135,7 @@ void configMqttTVOC() {
   doc_config_tvoc["name"] = "TVOC-Wert Wohnzimmer";  // Name des Zimmers bei Bedarf ändern
   doc_config_tvoc["state_topic"] = mqtt_state_topic;
   doc_config_tvoc["unit_of_measurement"] = "ppb";
-  doc_config_tvoc["value_template"] = "{{ value_json.tvoc}}";
+  doc_config_tvoc["value_template"] = "{{value_json.tvoc}}";
   serializeJson(doc_config_tvoc, mqtt_config_data_tvoc);
   client.publish(mqtt_config_topic_tvoc, mqtt_config_data_tvoc, true);
   delay(1000);
@@ -172,9 +175,9 @@ void loop() {
 
   // Daten vom Sensor lesen
   uint16_t eco2, tvoc, errstat, raw;
-  uint16_t temperaturGelesen = hdc1080.readTemperature();
-  uint16_t temperatur = temperaturGelesen - temperaturKorrekturfaktor;
-  uint8_t luftfeuchtigkeit = hdc1080.readHumidity();
+  float temperaturGelesen = hdc1080.readTemperature();
+  float temperatur = temperaturGelesen - temperaturKorrekturfaktor;
+  float luftfeuchtigkeit = hdc1080.readHumidity();
   ccs811.set_envdata(temperatur, luftfeuchtigkeit);
   ccs811.read(&eco2, &tvoc, &errstat, &raw);
 
@@ -202,6 +205,7 @@ void loop() {
     u8g2.print(tvoc);
     u8g2.print(" ppb");
   } while ( u8g2.nextPage() );
-  delay(1000);
+
+  delay(delay_time);
 
 }
